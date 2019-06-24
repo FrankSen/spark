@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import java.io._
-import java.util.{ArrayList => JArrayList, Locale}
+import java.util.{Locale, ArrayList => JArrayList}
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
-
 import jline.console.ConsoleReader
 import jline.console.history.FileHistory
 import org.apache.commons.lang3.StringUtils
@@ -37,14 +36,15 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.log4j.Level
 import org.apache.thrift.transport.TSocket
-
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.security.HiveDelegationTokenProvider
-import org.apache.spark.util.ShutdownHookManager
+import org.apache.spark.util.{ShutdownHookManager, Utils}
+
+import scala.collection.mutable.Seq
 
 /**
  * This code doesn't support remote connections in Hive 1.2+, as the underlying CliDriver
@@ -381,6 +381,7 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
           }
 
           val res = new JArrayList[String]()
+          val sb = new StringBuilder
 
           if (HiveConf.getBoolVar(conf, HiveConf.ConfVars.HIVE_CLI_PRINT_HEADER)) {
             // Print the column names.
@@ -389,7 +390,61 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
             }
           }
 
+          //output the file with schema.
+
+          val head_schema = Seq(driver.getSchema.getFieldSchemas).map { fields =>
+            fields.asScala.map(_.getName).mkString("\t")
+          }
+
+
           var counter = 0
+          try {
+            driver.getResults(res)
+
+            val colWidths = Array.fill(head_schema.head.split("\t").length)(3)
+
+            head_schema.head.split("\t").zipWithIndex.foreach { case (cell, i) =>
+              colWidths(i) = math.max(colWidths(i), Utils.stringHalfWidth(cell))
+            }
+
+
+            for (row <- res.asScala) {
+              for ((cell, i) <- row.split("\t").zipWithIndex) {
+                counter += 1
+                colWidths(i) = math.max(colWidths(i), Utils.stringHalfWidth(cell))
+              }
+            }
+
+            val paddedRows_head = head_schema.head.split("\t").zipWithIndex.map { case (cell, i) =>
+              StringUtils.leftPad(cell, colWidths(i) - Utils.stringHalfWidth(cell) + cell.length)
+            }
+
+            val paddedRows_tail = res.asScala.map { obj =>
+              obj.toString.split("\t").zipWithIndex.map { case (cell, i) =>
+                StringUtils.leftPad(cell, colWidths(i) - Utils.stringHalfWidth(cell) + cell.length)
+              }
+            }
+            val sep: String = colWidths.map("-" * _).addString(sb, "+", "+", "+\n").toString()
+
+            paddedRows_head.addString(sb, "|", "|", "|\n")
+
+            sb.append(sep)
+
+            paddedRows_tail.foreach(_.addString(sb, "|", "|", "|\n"))
+
+            sb.append(sep)
+
+            out.println(sb.toString())
+          } catch {
+            case e: IOException =>
+              console.printError(
+                s"""
+                   |Failed with exception ${e.getClass.getName}: ${e.getMessage}
+                   |${org.apache.hadoop.util.StringUtils.stringifyException(e)}
+                """.stripMargin)
+          }
+
+          /*var counter = 0
           try {
             while (!out.checkError() && driver.getResults(res)) {
               res.asScala.foreach { l =>
@@ -405,7 +460,7 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
                    |${org.apache.hadoop.util.StringUtils.stringifyException(e)}
                  """.stripMargin)
               ret = 1
-          }
+          }*/
 
           val cret = driver.close()
           if (ret == 0) {
