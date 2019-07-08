@@ -26,6 +26,12 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
+            <groupId>net.ccic</groupId>
+            <artifactId>etl</artifactId>
+            <version>1.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${project.version}</version>
@@ -55,7 +61,7 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
-        <!-- <dependency>
+         <dependency>
            <groupId>org.slf4j</groupId>
            <artifactId>slf4j-log4j12</artifactId>
            <version>1.7.16</version>
@@ -64,7 +70,7 @@
            <groupId>org.slf4j</groupId>
            <artifactId>slf4j-api</artifactId>
            <version>1.7.16</version>
-         </dependency>-->
+         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>

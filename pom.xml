@@ -89,6 +89,7 @@
     <module>common/unsafe</module>
     <module>common/tags</module>
     <module>core</module>
+    <module>etl</module>
     <module>graphx</module>
     <module>mllib</module>
     <module>mllib-local</module>
